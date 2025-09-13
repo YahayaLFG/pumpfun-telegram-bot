@@ -2,8 +2,8 @@ const { Telegraf } = require('telegraf');
 const fetch = require('node-fetch');
 
 // Get configuration from environment variables
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const CHANNEL_ID = process.env.CHANNEL_ID;
+const BOT_TOKEN = "8360879459:AAFdUY4He9GynBMdEWvXUx5RJQtoIZTG3HU";
+const CHANNEL_ID = "@pumpfunannoucement";
 const CHECK_INTERVAL = process.env.CHECK_INTERVAL || 30000;
 
 const bot = new Telegraf(BOT_TOKEN);
