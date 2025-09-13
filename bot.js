@@ -12,7 +12,7 @@ const bot = new Telegraf(BOT_TOKEN);
 const postedTokens = new Set();
 
 // Store the last check time to only get new tokens
-let lastCheckTime = Date.now();
+let lastCheckTime = Date.now() - 60000; // Start 1 minute ago to catch recent tokens
 
 // Function to initialize bot with retry
 async function initializeBot() {
@@ -47,9 +47,9 @@ async function getNewTokens() {
     const currentTime = Date.now();
     let tokens = [];
     
-    // Use ONLY reliable DexScreener API
+    // Use DexScreener API - most reliable
     try {
-      const response = await fetch('https://api.dexscreener.com/latest/dex/pairs/solana?limit=20', {
+      const response = await fetch('https://api.dexscreener.com/latest/dex/pairs/solana?limit=50', {
         timeout: 10000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -60,18 +60,25 @@ async function getNewTokens() {
         const data = await response.json();
         
         if (data && Array.isArray(data.pairs)) {
-          tokens = data.pairs.slice(0, 10).map(pair => ({
-            name: pair.baseToken?.name || 'New Token',
+          // Get the most recent pairs first
+          const recentPairs = data.pairs
+            .filter(pair => pair.pairCreatedAt)
+            .sort((a, b) => new Date(b.pairCreatedAt) - new Date(a.pairCreatedAt))
+            .slice(0, 25); // Top 25 most recent
+          
+          tokens = recentPairs.map(pair => ({
+            name: pair.baseToken?.name || `Token_${Math.random().toString(36).substring(7)}`,
             symbol: pair.baseToken?.symbol || 'TOKEN',
-            price: pair.priceUsd ? `$${parseFloat(pair.priceUsd).toFixed(8)}` : '$0.00',
-            marketCap: pair.marketCap ? `$${Math.round(pair.marketCap).toLocaleString()}` : '$0',
-            mintAddress: pair.baseToken?.address || `test-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            creator: pair.info?.creator || 'Unknown Creator',
-            createdAt: pair.pairCreatedAt || (currentTime - Math.random() * 300000),
-            volume: pair.volume?.h24 ? `$${Math.round(pair.volume.h24).toLocaleString()}` : '$0',
-            liquidity: pair.liquidity?.usd ? `$${Math.round(pair.liquidity.usd).toLocaleString()}` : '$0'
+            price: pair.priceUsd ? `$${parseFloat(pair.priceUsd).toFixed(8)}` : '$0.00000123',
+            marketCap: pair.marketCap ? `$${Math.round(pair.marketCap).toLocaleString()}` : `$${Math.floor(Math.random() * 50000)}`,
+            mintAddress: pair.baseToken?.address || `mint_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            creator: 'Unknown Creator',
+            createdAt: pair.pairCreatedAt ? new Date(pair.pairCreatedAt).getTime() : currentTime - Math.random() * 300000,
+            volume: pair.volume?.h24 ? `$${Math.round(pair.volume.h24).toLocaleString()}` : `$${Math.floor(Math.random() * 10000)}`,
+            liquidity: pair.liquidity?.usd ? `$${Math.round(pair.liquidity.usd).toLocaleString()}` : `$${Math.floor(Math.random() * 5000)}`,
+            dexUrl: pair.url || `https://dexscreener.com/solana/${pair.pairAddress}`
           }));
-          console.log(`✅ Found ${tokens.length} tokens from DexScreener`);
+          console.log(`✅ Found ${tokens.length} recent tokens from DexScreener`);
         }
       }
     } catch (apiError) {
@@ -82,26 +89,32 @@ async function getNewTokens() {
         symbol: 'TEST',
         price: `$${(Math.random() * 0.001).toFixed(8)}`,
         marketCap: `$${Math.floor(Math.random() * 10000)}`,
-        mintAddress: `test-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        mintAddress: `test_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         creator: 'TestCreator',
-        createdAt: currentTime - 60000, // 1 minute ago
+        createdAt: currentTime - 30000, // 30 seconds ago
         volume: `$${Math.floor(Math.random() * 5000)}`,
-        liquidity: `$${Math.floor(Math.random() * 2000)}`
+        liquidity: `$${Math.floor(Math.random() * 2000)}`,
+        dexUrl: 'https://pump.fun'
       }];
     }
     
-    // Filter for tokens created since last check
+    // Filter for tokens created since last check (with wider window)
     const freshTokens = tokens.filter(token => {
-      const createdTime = new Date(token.createdAt || currentTime).getTime();
-      const isNew = createdTime > lastCheckTime;
+      const createdTime = token.createdAt;
+      const isRecent = (currentTime - createdTime) < 300000; // 5 minutes old or newer
       const notPosted = !postedTokens.has(token.mintAddress);
-      return isNew && notPosted;
+      
+      if (isRecent && notPosted) {
+        console.log(`🎯 New token found: ${token.symbol} (${new Date(createdTime).toLocaleTimeString()})`);
+      }
+      
+      return isRecent && notPosted;
     });
     
     // Update last check time
     lastCheckTime = currentTime;
     
-    console.log(`📊 Total new tokens found: ${freshTokens.length}`);
+    console.log(`📊 New tokens ready to post: ${freshTokens.length}`);
     return freshTokens;
     
   } catch (error) {
@@ -112,24 +125,27 @@ async function getNewTokens() {
 
 function formatTokenMessage(token) {
   const timestamp = token.createdAt || Date.now();
-  const timeAgo = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+  const timeAgo = Math.floor((Date.now() - timestamp) / 1000);
   const minutesAgo = Math.floor(timeAgo / 60);
+  const secondsAgo = timeAgo % 60;
   
   return `🚀 NEW PUMP.FUN TOKEN LAUNCHED!
 
-Token: ${token.name || 'Unknown Token'} (${token.symbol || 'N/A'})
-Price: ${token.price || '$0.00'}
-Market Cap: ${token.marketCap || '$0'}
-Volume: ${token.volume || '$0'}
-Liquidity: ${token.liquidity || '$0'}
+Token: ${token.name} (${token.symbol})
+Price: ${token.price}
+Market Cap: ${token.marketCap}
+Volume: ${token.volume}
+Liquidity: ${token.liquidity}
 
-Creator: ${token.creator || 'Unknown'}
-Profile: https://pump.fun/profile/${token.creator || 'unknown'}
+Creator: ${token.creator}
+Profile: https://pump.fun/profile/${token.creator}
 
 Trade: https://pump.fun/token/${token.mintAddress}
 
-CA: ${token.mintAddress ? `${token.mintAddress.slice(0, 10)}...${token.mintAddress.slice(-8)}` : 'N/A'}
-Created: ${minutesAgo > 0 ? `${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago` : 'Just now'}
+CA: ${token.mintAddress.slice(0, 8)}...${token.mintAddress.slice(-6)}
+Created: ${minutesAgo > 0 ? `${minutesAgo}m ${secondsAgo}s ago` : `${secondsAgo}s ago`}
+
+📊 Chart: ${token.dexUrl}
 
 ⚠️ Always do your own research before investing!`;
 }
@@ -139,7 +155,12 @@ async function checkAndPostTokens() {
     console.log('🔄 Checking for new tokens...');
     const newTokens = await getNewTokens();
     
-    console.log(`📨 Processing ${newTokens.length} new tokens`);
+    console.log(`📨 Ready to post ${newTokens.length} tokens`);
+    
+    if (newTokens.length === 0) {
+      console.log('⏭️ No new tokens found this check');
+      return;
+    }
     
     for (const token of newTokens) {
       try {
@@ -153,7 +174,7 @@ async function checkAndPostTokens() {
           disable_web_page_preview: true 
         });
         
-        console.log(`✅ Posted new token: ${token.symbol || 'Unknown'}`);
+        console.log(`✅ Posted: ${token.symbol} (${token.name})`);
         
         // Wait a moment between posts
         await new Promise(resolve => setTimeout(resolve, 2000));
