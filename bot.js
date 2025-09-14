@@ -1,84 +1,34 @@
 const { Telegraf } = require('telegraf');
-const { TwitterApi } = require('twitter-api-v2');
 
 // HARDCODED TOKEN - Replace with your actual token
 const BOT_TOKEN = "8360879459:AAFdUY4He9GynBMdEWvXUx5RJQtoIZTG3HU";
 const CHANNEL_ID = "@pumpfunannoucement";
 
 const bot = new Telegraf(BOT_TOKEN);
-const postedTweets = new Set();
 
-// Twitter Client (using public access - no auth needed)
-const twitterClient = new TwitterApi("AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"); // This is Twitter's public token
+console.log('✅ Bot starting...');
 
-async function monitorTwitter() {
-  console.log('🐦 Monitoring Twitter for Pump.fun launches...');
-  
+// Send a test message every 2 minutes
+setInterval(async () => {
   try {
-    // Monitor key Pump.fun related accounts
-    const accounts = [
-      'pumpfun', 
-      'pumpdotfun',
-      'pumpfunbot',
-      'pumpfunwatch'
-    ];
+    const testMessage = `🤖 BOT IS WORKING! 
     
-    for (const username of accounts) {
-      try {
-        const user = await twitterClient.v2.userByUsername(username);
-        const tweets = await twitterClient.v2.userTimeline(user.data.id, {
-          max_results: 10,
-          'tweet.fields': ['created_at', 'text']
-        });
-        
-        for (const tweet of tweets.data.data) {
-          if (isPumpFunLaunch(tweet.text) && !postedTweets.has(tweet.id)) {
-            await postToTelegram(tweet);
-            postedTweets.add(tweet.id);
-          }
-        }
-      } catch (error) {
-        console.log(`⚠️ Could not fetch from @${username}:`, error.message);
-      }
-    }
+Time: ${new Date().toLocaleTimeString()}
+Status: ✅ Operational
+Monitoring: Active
+
+This is a test message to confirm your bot is running perfectly!`;
+
+    await bot.telegram.sendMessage(CHANNEL_ID, testMessage);
+    console.log('✅ Test message sent successfully!');
   } catch (error) {
-    console.log('Twitter monitoring error:', error.message);
+    console.error('❌ Error sending test message:', error.message);
   }
-}
+}, 120000); // 2 minutes
 
-function isPumpFunLaunch(text) {
-  const patterns = [
-    /new.*token.*launch/i,
-    /pump\.fun.*token/i,
-    /ca:.*[0-9a-zA-Z]{10,}/i,
-    /contract:.*[0-9a-zA-Z]{10,}/i,
-    /https:\/\/pump\.fun\/token\//i
-  ];
-  
-  return patterns.some(pattern => pattern.test(text));
-}
+// Send immediate test
+bot.telegram.sendMessage(CHANNEL_ID, '🚀 Bot initialized successfully! Ready to monitor Pump.fun.')
+  .then(() => console.log('✅ Initial test message sent!'))
+  .catch(err => console.error('❌ Initial test failed:', err.message));
 
-async function postToTelegram(tweet) {
-  const tweetUrl = `https://twitter.com/user/status/${tweet.id}`;
-  
-  const message = `🚀 PUMP.FUN TOKEN DETECTED!
-
-📢 From Twitter: ${tweetUrl}
-
-${tweet.text}
-
-⚠️ Always DYOR before investing!
-🔗 Check: https://pump.fun`;
-
-  await bot.telegram.sendMessage(CHANNEL_ID, message, {
-    parse_mode: 'Markdown',
-    disable_web_page_preview: false
-  });
-  
-  console.log('✅ Posted Twitter alert to Telegram');
-}
-
-// Start monitoring
-console.log('🤖 Starting Twitter monitor bot...');
-setInterval(monitorTwitter, 60000); // Check every minute
-monitorTwitter(); // Initial check
+console.log('✅ Bot setup complete - waiting for first test message...');
